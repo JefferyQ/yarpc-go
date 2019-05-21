@@ -63,7 +63,7 @@ func testIntegrationForTransportType(t *testing.T, transportType testutils.Trans
 			fooYARPCServer,
 			nil,
 			func(clients *exampleutil.Clients) error {
-				testIntegration(t, clients, keyValueYARPCServer, sinkYARPCServer, expectedStreamingHeaders)
+				testIntegration(t, transportType, clients, keyValueYARPCServer, sinkYARPCServer, expectedStreamingHeaders)
 				return nil
 			},
 		),
@@ -72,6 +72,7 @@ func testIntegrationForTransportType(t *testing.T, transportType testutils.Trans
 
 func testIntegration(
 	t *testing.T,
+	ttype testutils.TransportType,
 	clients *exampleutil.Clients,
 	keyValueYARPCServer *example.KeyValueYARPCServer,
 	sinkYARPCServer *example.SinkYARPCServer,
@@ -80,6 +81,16 @@ func testIntegration(
 	keyValueYARPCServer.SetNextError(intyarpcerrors.NewWithNamef(yarpcerrors.CodeUnknown, "foo-bar", "baz"))
 	err := setValue(clients.KeyValueYARPCClient, "foo", "bar")
 	assert.Equal(t, intyarpcerrors.NewWithNamef(yarpcerrors.CodeUnknown, "foo-bar", "baz"), err)
+
+	// error details only supported in grpc
+	if ttype == testutils.TransportTypeGRPC {
+		var protoDetails []interface{}
+		protoDetails = append(protoDetails, &examplepb.EchoBothRequest{})
+		keyValueYARPCServer.SetNextError(intyarpcerrors.NewWithNamef(yarpcerrors.CodeUnknown, "foo-bar", "baz").WithDetails(protoDetails))
+		err = setValue(clients.KeyValueYARPCClient, "foo", "bar")
+		assert.Equal(t, intyarpcerrors.NewWithNamef(yarpcerrors.CodeUnknown, "foo-bar", "baz").WithDetails(protoDetails), err)
+	}
+
 	keyValueYARPCServer.SetNextError(intyarpcerrors.NewWithNamef(yarpcerrors.CodeUnknown, "foo-bar", "baz"))
 	err = setValueGRPC(clients.KeyValueGRPCClient, clients.ContextWrapper, "foo", "bar")
 	assert.Equal(t, status.Error(codes.Unknown, "foo-bar: baz"), err)
